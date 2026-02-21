@@ -1,22 +1,14 @@
-FROM ubuntu:24.04
+FROM python:3.12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    && rm -rf /var/lib/apt/lists/*    
-
-RUN useradd -m -s /bin/bash service_user
 WORKDIR /app
-RUN chown -R service_user:service_user /app
-USER service_user
-
-RUN python3 -m venv venv
 
 COPY requirements.txt .
-RUN . venv/bin/activate && pip install --no-cache-dir -r requirements.txt
+
+RUN useradd -m -s /bin/bash service_user && chown -R service_user:service_user /app && apt-get update && rm -rf /var/lib/apt/lists/* && pip install --no-cache-dir -r requirements.txt  
+
+USER service_user
 
 COPY . .
 
