@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>WebRTC invoices-s01 — Data Channel</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 1rem auto; padding: 0 0.75rem; }
+    label { display: block; margin: 0.5rem 0; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 0.4rem; }
+    #log { white-space: pre-wrap; background: #0b1020; color: #dcdcff; padding: 0.75rem; border-radius: 8px; min-height: 160px; margin-top: 0.75rem; }
+    button { margin-right: 0.35rem; margin-top: 0.35rem; }
+  </style>
+</head>
+<body>
+  <h1>invoices-s01</h1>
+  <p>Signaling переводится через простой WebSocket (README недели 09). После установления связи текст идёт по <strong>RTCDataChannel</strong> (минуя текстовые файлы-сервер после хендшейка).</p>
+  <label>Signaling WS
+    <input id="sigUrl" value="ws://127.0.0.1:8765/ws" />
+  </label>
+  <button type="button" id="btnA">Открыть как вкладка A</button>
+  <button type="button" id="btnB">Открыть как вкладка B</button>
+  <label>Сообщение P2P
+    <textarea id="peerMsg" placeholder="сообщение..."></textarea>
+  </label>
+  <button type="button" id="btnSend" disabled>Отправить по Data Channel</button>
+  <div id="log"></div>
+
+  <script>
+    function log(...bits) {
+      const el = document.getElementById('log');
+      const line = bits.map(String).join(' ');
+      console.log(line);
+      el.textContent += line + '\n';
+    }
+
+    const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+    /** @type {WebSocket|null} */
+    let ws = null;
+    /** @type {RTCPeerConnection|null} */
+    let pc = null;
+    /** @type {RTCDataChannel|null} */
+    let chan = null;
+    /** @type {'offerer'|'answerer'|''} */
+    let side = '';
+
+    function wireSignals() {
+      if (!ws) return;
+      ws.onmessage = async (ev) => {
+        try {
+          const msg = JSON.parse(ev.data);
+          if (msg.kind === 'offer') {
+            if (side !== 'answerer') return;
+            if (!pc) pc = mkPc();
+            await pc.setRemoteDescription(msg.desc);
+            const ans = await pc.createAnswer();
+            await pc.setLocalDescription(ans);
+            ws.send(JSON.stringify({ kind: 'answer', desc: pc.localDescription }));
+          } else if (msg.kind === 'answer') {
+            if (side !== 'offerer') return;
+            if (!pc) return;
+            await pc.setRemoteDescription(msg.desc);
+          } else if (msg.kind === 'ice' && pc && msg.candidate) {
+            await pc.addIceCandidate(msg.candidate);
+          }
+        } catch (e) {
+          log('signal-error', String(e?.message || e));
+        }
+      };
+    }
+
+    function mkDcHandlers() {
+      if (!chan) return;
+      chan.onopen = () => {
+        log('datachannel open');
+        document.getElementById('btnSend').disabled = false;
+      };
+      chan.onclose = () => log('datachannel close');
+      chan.onmessage = (ev) => log('REMOTE', ev.data);
+    }
+
+    function mkPc() {
+      const conn = new RTCPeerConnection(ICE);
+      conn.onicecandidate = (ev) => {
+        if (ev.candidate && ws && ws.readyState === WebSocket.OPEN)
+          ws.send(JSON.stringify({ kind: 'ice', candidate: ev.candidate }));
+      };
+      conn.onconnectionstatechange = () => log('pc.state=', conn.connectionState);
+      return conn;
+    }
+
+    async function tabAStart() {
+      side = 'offerer';
+      const url = document.getElementById('sigUrl').value.trim();
+      ws = new WebSocket(url);
+      wireSignals();
+      ws.addEventListener('open', async () => {
+        log('signaling open (A)');
+        pc = mkPc();
+        chan = pc.createDataChannel('invoices-chat');
+        mkDcHandlers();
+
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        ws.send(JSON.stringify({ kind: 'offer', desc: pc.localDescription }));
+      });
+    }
+
+    async function tabBStart() {
+      side = 'answerer';
+      const url = document.getElementById('sigUrl').value.trim();
+      ws = new WebSocket(url);
+      wireSignals();
+
+      ws.addEventListener('open', async () => {
+        log('signaling open (B)');
+      });
+
+      pc = mkPc();
+      pc.ondatachannel = (ev) => {
+        chan = ev.channel;
+        mkDcHandlers();
+      };
+    }
+
+    document.getElementById('btnA').onclick = () => tabAStart();
+    document.getElementById('btnB').onclick = () => tabBStart();
+    document.getElementById('btnSend').onclick = () => {
+      const t = document.getElementById('peerMsg').value;
+      if (chan && chan.readyState === 'open') chan.send(t);
+      document.getElementById('peerMsg').value = '';
+    };
+  </script>
+</body>
+</html>

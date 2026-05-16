@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+// Контракт для notifications.v1 / NotificationsService (недели 07–08 по README).
+
+package notifications.v1;
+
+service NotificationsService {
+  rpc Ping(PingRequest) returns (PingResponse);
+  rpc Subscribe(SubscribeRequest) returns (stream NotificationEvent);
+}
+
+message PingRequest {
+  string client_id = 1;
+}
+
+message PingResponse {
+  string message = 1;
+}
+
+message SubscribeRequest {
+  string channel = 1;
+}
+
+message NotificationEvent {
+  string text = 1;
+  int32 seq = 2;
+}

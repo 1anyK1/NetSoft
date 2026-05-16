@@ -1,0 +1,24 @@
+type Item {
+  id: ID!
+  name: String!
+  sku: String!
+  price: Float!
+  quantity: Int!
+  createdAt: String!
+}
+
+type Query {
+  items: [Item!]!
+  item(id: ID!): Item
+}
+
+type Mutation {
+  createItem(input: CreateItemInput!): Item!
+}
+
+input CreateItemInput {
+  name: String!
+  sku: String!
+  price: Float!
+  quantity: Int!
+}

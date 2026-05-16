@@ -1,0 +1,31 @@
+# Стек недели 03: два бэкенда + Nginx как API Gateway (см. README).
+services:
+  comments-svc-s01:
+    build: ./app
+    expose:
+      - "8298"
+    networks:
+      - gateway_net
+
+  other-svc-s01:
+    build: ./other
+    expose:
+      - "8299"
+    networks:
+      - gateway_net
+
+  gateway:
+    image: nginx:alpine
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - comments-svc-s01
+      - other-svc-s01
+    networks:
+      - gateway_net
+
+networks:
+  gateway_net:
+    driver: bridge

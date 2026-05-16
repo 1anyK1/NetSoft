@@ -1,0 +1,32 @@
+services:
+  comments-svc:
+    build:
+      context: ../week-03/app
+    expose:
+      - "8298"
+    networks:
+      - finale
+
+  items-graphql-svc:
+    build:
+      context: ../week-05/app
+    expose:
+      - "8101"
+    networks:
+      - finale
+
+  gateway:
+    image: nginx:alpine
+    volumes:
+      - ./nginx.gateway.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "9080:80"
+    depends_on:
+      - comments-svc
+      - items-graphql-svc
+    networks:
+      - finale
+
+networks:
+  finale:
+    driver: bridge
